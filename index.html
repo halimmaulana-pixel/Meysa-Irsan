@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+
 <title>Meyssa & Irsan — 19 Juli 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#E8607A">
@@ -600,7 +601,20 @@ input,select,textarea { font-size:16px !important; }
 <div id="sbar"></div>
 <div id="mnote">🎵 Lagu Nikah — Juicy Luicy</div>
 <button id="mbtn" onclick="toggleMusic()"><svg id="mic-ico" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12-2c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"/></svg></button>
-<div id="yt" style="display:none;"></div>
+<!-- BACKSOUND: HTML5 Audio (paling reliable di mobile) -->
+<audio id="bg-audio" loop preload="none" style="display:none;"
+  crossorigin="anonymous">
+  <!-- Fallback URLs dicoba berurutan oleh browser -->
+  <source src="https://archive.org/download/juicy-luicy-terlalu-tinggi-official-music-video/Juicy%20Luicy%20-%20Lagu%20Nikah%20(Official%20Lyric%20Video).mp3" type="audio/mpeg">
+  <source src="https://archive.org/download/juicy-luicy-lagu-nikah-official-lyric-video/Juicy%20Luicy%20Lagu%20Nikah%20(%20Official%20Lyric%20Video).mp3" type="audio/mpeg">
+</audio>
+<!-- YouTube iframe fallback jika audio gagal -->
+<iframe id="yt-frame"
+  src="about:blank"
+  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+  allowfullscreen
+  style="position:fixed;left:-9999px;top:-9999px;width:2px;height:2px;border:0;opacity:0.01;pointer-events:none;"
+></iframe>
 <div id="cursor"></div>
 
 <!-- PWA INSTALL BANNER -->
@@ -1087,7 +1101,10 @@ function initConstellation(){
 const EMOJIS=['❤️','💕','🌸','✨','💫','🌺','🎊','💖','🌼','🥂','💝','⭐','🎉','💐','🌟'];
 let envDone=false;
 function openEnv(){
-  if(envDone)return;envDone=true;
+  if(envDone)return;
+  // PERTAMA: Start music dalam user gesture (sebelum setTimeout apapun!)
+  startMusic();
+  envDone=true;
   // Cinematic bars
   haptic('open');document.getElementById('cine-top').classList.add('show');
   document.getElementById('cine-bot').classList.add('show');
@@ -1117,8 +1134,6 @@ function openEnv(){
       setTimeout(()=>el.remove(),(1.2+i*.03)*1000+600);
     }
   }catch(e){}},800);
-  // Start music
-  startMusic();
   // Remove cinematic + show invitation
   setTimeout(()=>{
     document.getElementById('cine-top').classList.remove('show');
@@ -1272,6 +1287,8 @@ const fnavEl=document.getElementById('fnav');
 navSecs.forEach((id,i)=>{
   const d=document.createElement('div');d.className='fnd';d.title=id;
   d.onclick=()=>document.getElementById(id).scrollIntoView({behavior:'smooth'});
+function navTo(id){document.getElementById(id).scrollIntoView({behavior:'smooth'});}
+
   fnavEl.appendChild(d);
 });
 const navDots=document.querySelectorAll('.fnd');
@@ -1293,58 +1310,80 @@ window.addEventListener('scroll',()=>{
 const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');obs.unobserve(e.target);}});},{threshold:.08});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
-/* ══ YOUTUBE MUSIC ══ */
-let mOn=false,ytp=null;
-const ytag=document.createElement('script');
-ytag.src='https://www.youtube.com/iframe_api';
-document.head.appendChild(ytag);
-// onYouTubeIframeAPIReady removed
-// ══ BACKSOUND — JUICY LUICY: LAGU NIKAH ══
+/* ══ BACKSOUND: Juicy Luicy — Lagu Nikah ══ */
+/* ══ BACKSOUND: HTML5 Audio + YouTube fallback ══ */
 const MUSIC_ID = 'WNw2yH_waVc';
-let musicFrame = null;
 let musicOn = false;
 let musicStarted = false;
 
 function startMusic(){
   if(musicStarted) return;
   musicStarted = true;
-  // Inject iframe langsung saat user gesture — paling reliable di mobile
-  const wrap = document.getElementById('yt');
-  if(!wrap) return;
-  wrap.innerHTML = '<iframe id="yt-frame" '
-    + 'src="https://www.youtube-nocookie.com/embed/' + MUSIC_ID
-    + '?autoplay=1&loop=1&playlist=' + MUSIC_ID
-    + '&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&enablejsapi=1" '
-    + 'allow="autoplay; encrypted-media" '
-    + 'allowfullscreen '
-    + 'style="width:1px;height:1px;opacity:0;pointer-events:none;position:absolute;" '
-    + 'loading="lazy">'
-    + '</iframe>';
-  musicFrame = document.getElementById('yt-frame');
   musicOn = true;
-  document.getElementById('mbtn').classList.add('on');
-  document.getElementById('mic-ico').style.opacity='1';
-  const mn = document.getElementById('mnote');
-  if(mn){ mn.style.display='block'; setTimeout(()=>mn.style.display='none',3500); }
+
+  // Prioritas 1: HTML5 Audio (paling reliable mobile)
+  var audio = document.getElementById('bg-audio');
+  if(audio){
+    audio.volume = 0.8;
+    var promise = audio.play();
+    if(promise !== undefined){
+      promise.then(function(){
+        console.log('✓ Audio HTML5 playing');
+        updateMusicUI(true);
+      }).catch(function(e){
+        console.log('HTML5 audio failed:', e.name, '— trying YouTube iframe...');
+        startYouTubeFallback();
+      });
+    } else {
+      updateMusicUI(true);
+    }
+    return;
+  }
+  // Jika tidak ada audio element, langsung YouTube
+  startYouTubeFallback();
+}
+
+function startYouTubeFallback(){
+  var fr = document.getElementById('yt-frame');
+  if(!fr) return;
+  fr.src = 'https://www.youtube.com/embed/' + MUSIC_ID
+    + '?autoplay=1&mute=0&loop=1&playlist=' + MUSIC_ID
+    + '&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0';
+  console.log('✓ YouTube iframe fallback started');
+  updateMusicUI(true);
+}
+
+function updateMusicUI(playing){
+  musicOn = playing;
+  var btn = document.getElementById('mbtn');
+  if(btn) btn.classList.toggle('on', playing);
+  var ico = document.getElementById('mic-ico');
+  if(ico) ico.style.opacity = playing ? '1' : '0.4';
+  if(playing){
+    var mn = document.getElementById('mnote');
+    if(mn){ mn.style.display='block'; setTimeout(function(){mn.style.display='none';},3500); }
+  }
 }
 
 function toggleMusic(){
   if(!musicStarted){ startMusic(); return; }
-  const fr = document.getElementById('yt-frame');
+  var audio = document.getElementById('bg-audio');
+  if(audio && audio.src && audio.src !== '' && audio.src !== window.location.href){
+    // Toggle HTML5 audio
+    if(musicOn){ audio.pause(); updateMusicUI(false); }
+    else { audio.play().catch(function(){}); updateMusicUI(true); }
+    return;
+  }
+  // Toggle YouTube iframe
+  var fr = document.getElementById('yt-frame');
   if(!fr) return;
   if(musicOn){
-    // Pause: replace src dengan blank
     fr.dataset.src = fr.src;
     fr.src = 'about:blank';
-    musicOn = false;
-    document.getElementById('mbtn').classList.remove('on');
-    document.getElementById('mic-ico').style.opacity='0.4';
+    updateMusicUI(false);
   } else {
-    // Resume: restore src
-    fr.src = fr.dataset.src || ('https://www.youtube-nocookie.com/embed/' + MUSIC_ID + '?autoplay=1&loop=1&playlist=' + MUSIC_ID + '&controls=0');
-    musicOn = true;
-    document.getElementById('mbtn').classList.add('on');
-    document.getElementById('mic-ico').style.opacity='1';
+    fr.src = fr.dataset.src || ('https://www.youtube.com/embed/'+MUSIC_ID+'?autoplay=1&mute=0&loop=1&playlist='+MUSIC_ID+'&controls=0');
+    updateMusicUI(true);
   }
 }
 function toggleMusic(){
